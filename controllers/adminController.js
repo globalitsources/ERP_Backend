@@ -49,16 +49,29 @@ const register = async (req, res) => {
 const createProject = async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name)
+
+    if (!name) {
       return res.status(400).json({ message: "Project name is required" });
+    }
+
+    const existingProject = await Project.findOne({
+      name: { $regex: new RegExp(`^${name}$`, "i") },
+    });
+
+    if (existingProject) {
+      return res.status(400).json({ message: "Project already exists" });
+    }
 
     const newProject = new Project({ name });
     await newProject.save();
+
     res.status(201).json(newProject);
   } catch (error) {
+    console.error("Create project error:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
+
 
 // Get all projects
 const getAllProjects = async (req, res) => {
@@ -106,7 +119,7 @@ const deleteProject = async (req, res) => {
 //get all users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await Admin.find({}, "_id name");
+    const users = await Admin.find({}, "_id name").sort({ createdAt: -1 });
 
     res.status(200).json(users);
   } catch (error) {
@@ -116,33 +129,30 @@ const getAllUsers = async (req, res) => {
 };
 
 // assign project
-
 const assignProject = async (req, res) => {
-  const { name, project } = req.body;
+  const { name, projects } = req.body;
 
   console.log("Backend received:", req.body);
 
-  if (!name || !project) {
+  if (!name || !projects || !Array.isArray(projects) || projects.length === 0) {
     return res
       .status(400)
-      .json({ message: "User ID and Project ID required." });
+      .json({ message: "User ID and at least one Project ID are required." });
   }
-
   try {
-    const newAssignment = new assignmentModels({
+    const assignments = projects.map((projectId) => ({
       name,
-      project,
-    });
+      project: projectId,
+    }));
 
-    await newAssignment.save();
+    await assignmentModels.insertMany(assignments);
 
-    res.status(201).json({ message: "Project assigned successfully." });
+    res.status(201).json({ message: "Projects assigned successfully." });
   } catch (error) {
     console.error("Assignment error:", error);
     res.status(500).json({ message: "❗ Server error during assignment." });
   }
 };
-
 const getTodayReports = async (req, res) => {
   try {
     const startOfDay = new Date();
@@ -151,26 +161,78 @@ const getTodayReports = async (req, res) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
+    // 1. Fetch today's reports
     const reports = await Report.find({
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     })
-      .populate("userId", "name")
+      .populate({ path: "userId", select: "name", strictPopulate: false })
       .sort({ createdAt: -1 });
 
-    const formatted = reports.map((r) => ({
-      name: r.userId.name,
-      projectName: r.projectName,
-      workType: r.workType,
-      taskNumber: r.taskNumber,
-      workDescription: r.workDescription,
-    }));
+    // 2. Get all assignments (users + their projects)
+    const assignments = await assignmentModels.find()
+      .populate({ path: "name", select: "name", strictPopulate: false }) // user
+      .populate({ path: "project", select: "name", strictPopulate: false }); // project
 
-    res.status(200).json(formatted);
+    // 3. Group assignments by user
+    const userMap = {};
+
+    assignments.forEach((assignment) => {
+      const userId = assignment.name._id.toString();
+      const userName = assignment.name.name;
+      const projectName = assignment.project?.name || "Unnamed Project";
+
+      if (!userMap[userId]) {
+        userMap[userId] = {
+          name: userName,
+          reports: [],
+          assignedProjects: [],
+        };
+      }
+
+      userMap[userId].assignedProjects.push(projectName);
+    });
+
+    // 4. Map reports to user
+    reports.forEach((report) => {
+      const userId = report.userId._id.toString();
+      if (userMap[userId]) {
+        userMap[userId].reports.push(report);
+      }
+    });
+
+    // 5. Prepare final structured data
+    const userData = Object.values(userMap).map((user) => {
+      const combined = user.assignedProjects.map((projectName) => {
+        const report = user.reports.find((r) => r.projectName === projectName);
+        return report
+          ? {
+            projectName,
+            taskNumber: report.taskNumber,
+            workType: report.workType,
+            workDescription: report.workDescription,
+          }
+          : {
+            projectName,
+            taskNumber: null,
+            workType: null,
+            workDescription: null,
+          };
+      });
+
+      return {
+        name: user.name,
+        reports: combined,
+      };
+    });
+
+    res.status(200).json(userData);
   } catch (error) {
     console.error("Today report error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+
 
 const allReports = async (req, res) => {
   try {
@@ -180,6 +242,37 @@ const allReports = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch reports" });
   }
 };
+const getReportsByUser = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const reports = await Report.find({ userId }).sort({ createdAt: -1 });
+    res.json(reports);
+  } catch (error) {
+    console.error("Error fetching reports:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+const getAssignedProjectsByAdmin = async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const assignments = await assignmentModels
+      .find({ name: userId })
+      .populate("project", "name")
+      .sort({ createdAt: -1 });
+
+    const projectList = assignments.map((a) => ({
+      id: a.project._id,
+      name: a.project.name,
+    }));
+
+    res.json(projectList);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching assigned projects" });
+  }
+};
+
 
 export {
   deleteProject,
@@ -191,4 +284,6 @@ export {
   assignProject,
   getTodayReports,
   allReports,
+  getReportsByUser,
+  getAssignedProjectsByAdmin,
 };
