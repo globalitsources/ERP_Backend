@@ -235,7 +235,6 @@ const getTodayReports = async (req, res) => {
 
 
 
-
 const allReports = async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 });
