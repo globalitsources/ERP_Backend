@@ -153,6 +153,7 @@ const assignProject = async (req, res) => {
     res.status(500).json({ message: "❗ Server error during assignment." });
   }
 };
+
 const getTodayReports = async (req, res) => {
   try {
     const startOfDay = new Date();
@@ -231,6 +232,7 @@ const getTodayReports = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 
 
