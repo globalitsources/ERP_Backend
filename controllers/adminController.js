@@ -261,14 +261,16 @@ const getAssignedProjectsByAdmin = async (req, res) => {
       .populate("project", "name")
       .sort({ createdAt: -1 });
 
-    const projectList = assignments.map((a) => ({
-      id: a.project._id,
-      name: a.project.name,
-    }));
+    const projectList = assignments
+      .filter(a => a.project) // ✅ Only keep items where project is populated
+      .map((a) => ({
+        id: a.project._id,
+        name: a.project.name,
+      }));
 
     res.json(projectList);
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching assigned projects:", error);
     res.status(500).json({ message: "Error fetching assigned projects" });
   }
 };
