@@ -153,7 +153,6 @@ const assignProject = async (req, res) => {
     res.status(500).json({ message: "❗ Server error during assignment." });
   }
 };
-
 const getTodayReports = async (req, res) => {
   try {
     const startOfDay = new Date();
@@ -169,18 +168,20 @@ const getTodayReports = async (req, res) => {
       .populate({ path: "userId", select: "name", strictPopulate: false })
       .sort({ createdAt: -1 });
 
-    // 2. Get all assignments (users + their projects)
+    // 2. Get all assignments
     const assignments = await assignmentModels.find()
       .populate({ path: "name", select: "name", strictPopulate: false }) // user
       .populate({ path: "project", select: "name", strictPopulate: false }); // project
 
-    // 3. Group assignments by user
     const userMap = {};
 
+    // 3. Build user-project map
     assignments.forEach((assignment) => {
+      if (!assignment.name || !assignment.project) return; // ✅ skip null user/project
+
       const userId = assignment.name._id.toString();
       const userName = assignment.name.name;
-      const projectName = assignment.project?.name || "Unnamed Project";
+      const projectName = assignment.project.name || "Unnamed Project";
 
       if (!userMap[userId]) {
         userMap[userId] = {
@@ -193,31 +194,33 @@ const getTodayReports = async (req, res) => {
       userMap[userId].assignedProjects.push(projectName);
     });
 
-    // 4. Map reports to user
+    // 4. Attach today's reports
     reports.forEach((report) => {
+      if (!report.userId) return; // ✅ skip unlinked reports
+
       const userId = report.userId._id.toString();
       if (userMap[userId]) {
         userMap[userId].reports.push(report);
       }
     });
 
-    // 5. Prepare final structured data
+    // 5. Format final output
     const userData = Object.values(userMap).map((user) => {
       const combined = user.assignedProjects.map((projectName) => {
         const report = user.reports.find((r) => r.projectName === projectName);
         return report
           ? {
-            projectName,
-            taskNumber: report.taskNumber,
-            workType: report.workType,
-            workDescription: report.workDescription,
-          }
+              projectName,
+              taskNumber: report.taskNumber,
+              workType: report.workType,
+              workDescription: report.workDescription,
+            }
           : {
-            projectName,
-            taskNumber: null,
-            workType: null,
-            workDescription: null,
-          };
+              projectName,
+              taskNumber: null,
+              workType: null,
+              workDescription: null,
+            };
       });
 
       return {
@@ -229,7 +232,7 @@ const getTodayReports = async (req, res) => {
     res.status(200).json(userData);
   } catch (error) {
     console.error("Today report error:", error);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
