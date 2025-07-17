@@ -48,7 +48,7 @@ const register = async (req, res) => {
 // Create a new project
 const createProject = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, url } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Project name is required" });
@@ -62,7 +62,7 @@ const createProject = async (req, res) => {
       return res.status(400).json({ message: "Project already exists" });
     }
 
-    const newProject = new Project({ name });
+    const newProject = new Project({ name, url: url || null });
     await newProject.save();
 
     res.status(201).json(newProject);
@@ -87,13 +87,17 @@ const getAllProjects = async (req, res) => {
 const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, url } = req.body;
 
     const updated = await Project.findByIdAndUpdate(
       id,
-      { name },
+      {
+        ...(name && { name }),
+        ...(url !== undefined && { url }),
+      },
       { new: true }
     );
+
     if (!updated) return res.status(404).json({ message: "Project not found" });
 
     res.status(200).json(updated);
@@ -101,6 +105,7 @@ const updateProject = async (req, res) => {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
+
 
 // Delete project by ID
 const deleteProject = async (req, res) => {
@@ -153,6 +158,8 @@ const assignProject = async (req, res) => {
     res.status(500).json({ message: "❗ Server error during assignment." });
   }
 };
+
+
 const getTodayReports = async (req, res) => {
   try {
     const startOfDay = new Date();
@@ -161,23 +168,20 @@ const getTodayReports = async (req, res) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    // 1. Fetch today's reports
     const reports = await Report.find({
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     })
       .populate({ path: "userId", select: "name", strictPopulate: false })
       .sort({ createdAt: -1 });
 
-    // 2. Get all assignments
     const assignments = await assignmentModels.find()
       .populate({ path: "name", select: "name", strictPopulate: false }) // user
       .populate({ path: "project", select: "name", strictPopulate: false }); // project
 
     const userMap = {};
 
-    // 3. Build user-project map
     assignments.forEach((assignment) => {
-      if (!assignment.name || !assignment.project) return; // ✅ skip null user/project
+      if (!assignment.name || !assignment.project) return;
 
       const userId = assignment.name._id.toString();
       const userName = assignment.name.name;
@@ -191,36 +195,43 @@ const getTodayReports = async (req, res) => {
         };
       }
 
-      userMap[userId].assignedProjects.push(projectName);
+      if (!userMap[userId].assignedProjects.includes(projectName)) {
+        userMap[userId].assignedProjects.push(projectName);
+      }
     });
-
-    // 4. Attach today's reports
     reports.forEach((report) => {
-      if (!report.userId) return; // ✅ skip unlinked reports
+      if (!report.userId) return;
 
       const userId = report.userId._id.toString();
       if (userMap[userId]) {
-        userMap[userId].reports.push(report);
+        report.reports.forEach((entry) => {
+          userMap[userId].reports.push({
+            projectName: report.projectName,
+            taskNumber: entry.taskNumber,
+            workType: entry.workType,
+            workDescription: entry.workDescription,
+          });
+        });
       }
     });
 
-    // 5. Format final output
+
     const userData = Object.values(userMap).map((user) => {
-      const combined = user.assignedProjects.map((projectName) => {
-        const report = user.reports.find((r) => r.projectName === projectName);
-        return report
-          ? {
-              projectName,
-              taskNumber: report.taskNumber,
-              workType: report.workType,
-              workDescription: report.workDescription,
-            }
-          : {
+      const combined = user.assignedProjects.flatMap((projectName) => {
+        const reportsForProject = user.reports.filter(
+          (r) => r.projectName === projectName
+        );
+
+        return reportsForProject.length > 0
+          ? reportsForProject
+          : [
+            {
               projectName,
               taskNumber: null,
               workType: null,
               workDescription: null,
-            };
+            },
+          ];
       });
 
       return {
@@ -266,7 +277,7 @@ const getAssignedProjectsByAdmin = async (req, res) => {
       .sort({ createdAt: -1 });
 
     const projectList = assignments
-      .filter(a => a.project) // ✅ Only keep items where project is populated
+      .filter(a => a.project)
       .map((a) => ({
         id: a.project._id,
         name: a.project.name,
