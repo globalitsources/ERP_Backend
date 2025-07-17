@@ -58,50 +58,45 @@ const getUserProjects = async (req, res) => {
     res.status(500).json({ message: "Error fetching assigned projects" });
   }
 };
+
 const submitReport = async (req, res) => {
   try {
-    const {
-      userId,
-      projectId,
-      projectName,
-      workType,
-      taskNumber,
-      workDescription,
-    } = req.body;
-    console.log(projectId);
+    const { userId, projectId, projectName, reports } = req.body;
+
     if (
       !userId ||
       !projectId ||
       !projectName ||
-      !workType ||
-      !taskNumber ||
-      !workDescription
+      !Array.isArray(reports) ||
+      reports.length === 0
     ) {
       return res.status(400).json({ message: "All fields are required." });
     }
 
-    const user = await Admin.findOne({ userId });
+    const user = await Admin.findOne({ userId: String(userId) });
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    const report = new Report({
+    const reportDoc = new Report({
       userId: user._id,
       projectId: new mongoose.Types.ObjectId(projectId),
       projectName,
-      workType,
-      taskNumber,
-      workDescription,
+      reports,
     });
 
-    await report.save();
+    await reportDoc.save();
 
-    res.status(201).json({ message: "Work report submitted successfully!" });
+    res.status(201).json({ message: "Work reports submitted successfully!" });
   } catch (error) {
     console.error("Submit Report Error:", error.message);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+
+
+
 
 //  Get reports by filter (date, month, year)
 const getReports = async (req, res) => {
