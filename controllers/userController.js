@@ -186,7 +186,7 @@ const getCurrentISTStatus = (req, res) => {
   const currentMinutes = nowIST.hours() * 60 + nowIST.minutes();
 
   const firstHalfStart = 13 * 60;      // 1:00 PM IST
-  const firstHalfEnd = 13 * 60 + 30;   // 1:30 PM IST
+  const firstHalfEnd = 14 * 60 + 10;   // 1:30 PM IST
 
   const secondHalfStart = 18 * 60;     // 6:00 PM IST
   const secondHalfEnd = 18 * 60 + 30;  // 6:30 PM IST
