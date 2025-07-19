@@ -152,4 +152,30 @@ const getReportById = async (req, res) => {
   }
 };
 
-export { login, getUserProjects, submitReport, getReports, getReportById };
+const getReportByProjectAndUser = async (req, res) => {
+  try {
+    const { projectId, userId } = req.params;
+    console.log("Looking for projectId:", projectId, "and userId:", userId);
+
+    if (!mongoose.Types.ObjectId.isValid(projectId) || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid projectId or userId" });
+    }
+
+    const report = await Report.find({
+      projectId: new mongoose.Types.ObjectId(projectId),
+      userId: new mongoose.Types.ObjectId(userId),
+    }).sort({ createdAt: -1 });
+
+    if (!report || report.length === 0) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    res.status(200).json(report);
+  } catch (error) {
+    console.error("Fetch error:", error.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export { login, getUserProjects, submitReport, getReports, getReportByProjectAndUser, getReportById };
