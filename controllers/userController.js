@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import Report from "../models/reportModel.js";
 import assignmentModels from "../models/assignmentModels.js";
 import mongoose from "mongoose";
+import moment from "moment-timezone";
 
 const login = async (req, res) => {
   try {
@@ -178,4 +179,31 @@ const getReportByProjectAndUser = async (req, res) => {
 };
 
 
-export { login, getUserProjects, submitReport, getReports, getReportByProjectAndUser, getReportById };
+const getCurrentISTStatus = (req, res) => {
+  // Get current time in IST using moment-timezone
+  const nowIST = moment().tz("Asia/Kolkata");
+
+  const currentMinutes = nowIST.hours() * 60 + nowIST.minutes();
+
+  const firstHalfStart = 13 * 60;      // 1:00 PM IST
+  const firstHalfEnd = 13 * 60 + 30;   // 1:30 PM IST
+
+  const secondHalfStart = 18 * 60;     // 6:00 PM IST
+  const secondHalfEnd = 18 * 60 + 30;  // 6:30 PM IST
+
+  const isAllowed =
+    (currentMinutes >= firstHalfStart && currentMinutes <= firstHalfEnd) ||
+    (currentMinutes >= secondHalfStart && currentMinutes <= secondHalfEnd);
+
+  return res.json({
+    allowed: isAllowed,
+    currentIST: nowIST.format("HH:mm"),
+    message: isAllowed
+      ? "✅ You can submit the report now."
+      : "⛔ Report submission is only allowed from 1:00 – 1:30 PM and 6:00 – 6:30 PM (IST).",
+  });
+};
+
+
+
+export { login, getUserProjects, submitReport, getReports, getReportByProjectAndUser, getReportById,getCurrentISTStatus };
