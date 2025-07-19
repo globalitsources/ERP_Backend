@@ -11,6 +11,7 @@ import {
   allReports,
   getReportsByUser,
   getAssignedProjectsByAdmin,
+  deleteUser,
 } from "../controllers/adminController.js";
 import auth from "../middlewares/auth.js";
 
@@ -28,6 +29,7 @@ router.get("/reports/today", auth, getTodayReports);
 router.get("/reports", auth, allReports);
 router.get("/user/:userId/reports", auth, getReportsByUser);
 router.get("/assigned-projects/:userId", getAssignedProjectsByAdmin);
+router.delete("/user/:userId", auth, deleteUser);
 
 
 
