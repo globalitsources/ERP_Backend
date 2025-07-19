@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getReportById,
+  getReportByProjectAndUser,
   getReports,
   getUserProjects,
   login,
@@ -16,5 +17,6 @@ router.post("/projects", auth, getUserProjects);
 router.post("/submit", auth, submitReport);
 router.get("/get", auth, getReports);
 router.get("/report/details/:projectId", auth, getReportById);
+router.get("/report/:projectId/:userId", auth, getReportByProjectAndUser);
 
 export default router;
